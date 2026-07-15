@@ -37,7 +37,7 @@ public class SignalGunItem extends Item {
         if (AirdropScheduler.isSignalGunOnCooldown(player.getUUID())) {
             long remaining = AirdropScheduler.getSignalGunCooldownRemaining(player.getUUID());
             long seconds = remaining / 1000;
-            player.sendSystemMessage(Component.literal("§c信号枪冷却中，剩余 " + seconds + " 秒"));
+            player.sendSystemMessage(Component.translatable("airdrop.message.signal_gun.cooldown", seconds));
             return InteractionResultHolder.fail(stack);
         }
 

@@ -243,17 +243,13 @@ public class AirdropScheduler {
 
         level.playSound(null, pos, SoundEvents.ENDER_DRAGON_GROWL, SoundSource.BLOCKS, 1.5f, 0.5f);
 
-        String tierName = switch (tier) {
-            case COMMON -> "普通";
-            case MEDIUM -> "中等";
-            case ADVANCED -> "高级";
-        };
-        String typeName = isTimed ? "定时空投" : "手动空投";
-        String message = String.format("§6[空投] §e%s§6级§a%s§6已出现在 §b(%d, %d, %d)",
-                tierName, typeName, pos.getX(), pos.getY(), pos.getZ());
+        Component message = Component.translatable("airdrop.message.announcement",
+                tier.getDisplayName(),
+                Component.translatable(isTimed ? "airdrop.type.timed" : "airdrop.type.manual"),
+                pos.getX(), pos.getY(), pos.getZ());
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.sendSystemMessage(Component.literal(message));
+            player.sendSystemMessage(message);
         }
 
         airDrop.LOGGER.info("Airdrop spawned: {} tier at ({}, {}, {}), timed={}",

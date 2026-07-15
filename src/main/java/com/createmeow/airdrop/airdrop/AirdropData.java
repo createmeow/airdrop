@@ -1,6 +1,7 @@
 package com.createmeow.airdrop.airdrop;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringRepresentable;
 
 public class AirdropData {
@@ -37,6 +38,10 @@ public class AirdropData {
         @Override
         public String getSerializedName() {
             return name().toLowerCase();
+        }
+
+        public Component getDisplayName() {
+            return Component.translatable("airdrop.tier." + getSerializedName());
         }
     }
 

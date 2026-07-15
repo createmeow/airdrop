@@ -8,5 +8,20 @@
   "airdrop.configuration.section.airdrop.common.toml": "AirDrop Configs",
   "airdrop.configuration.section.airdrop.common.toml.title": "AirDrop Configs",
   "airdrop.configuration.baseMinDistance": "Base Min Distance",
-  "airdrop.configuration.airdropLifetimeTicks": "Airdrop Lifetime (ticks)"
+  "airdrop.configuration.airdropLifetimeTicks": "Airdrop Lifetime (ticks)",
+
+  "airdrop.tier.common": "Common",
+  "airdrop.tier.medium": "Medium",
+  "airdrop.tier.advanced": "Advanced",
+
+  "airdrop.type.timed": "Timed Airdrop",
+  "airdrop.type.manual": "Manual Airdrop",
+
+  "airdrop.message.command.spawned": "Spawned %s airdrop at (%s, %s, %s)",
+  "airdrop.message.config.added": "Added item %s to %s airdrop loot table",
+  "airdrop.message.config.removed": "Removed %s from %s airdrop loot table",
+  "airdrop.message.config.not_found": "Item %s not found in %s airdrop loot table",
+  "airdrop.message.config.unknown_operation": "Unknown operation: %s, use add or rm",
+  "airdrop.message.signal_gun.cooldown": "§cSignal gun is on cooldown, %s seconds remaining",
+  "airdrop.message.announcement": "§6[Airdrop] §e%s §6 §a%s §6spawned at §b(%s, %s, %s)"
 }

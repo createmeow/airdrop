@@ -34,7 +34,7 @@ public class AirdropCommand {
         AirdropScheduler.spawnCommandAirdrop(context.getSource().getServer(), tier, pos);
 
         context.getSource().sendSuccess(
-                () -> Component.literal("已生成" + tier.getSerializedName() + "空投于 (" + x + ", " + y + ", " + z + ")"),
+                () -> Component.translatable("airdrop.message.command.spawned", tier.getDisplayName(), x, y, z),
                 true);
 
         return 1;

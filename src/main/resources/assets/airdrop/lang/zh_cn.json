@@ -8,5 +8,20 @@
   "airdrop.configuration.section.airdrop.common.toml": "空投配置",
   "airdrop.configuration.section.airdrop.common.toml.title": "空投配置",
   "airdrop.configuration.baseMinDistance": "基地最小距离",
-  "airdrop.configuration.airdropLifetimeTicks": "空投存在时间 (ticks)"
+  "airdrop.configuration.airdropLifetimeTicks": "空投存在时间 (ticks)",
+
+  "airdrop.tier.common": "普通",
+  "airdrop.tier.medium": "中等",
+  "airdrop.tier.advanced": "高级",
+
+  "airdrop.type.timed": "定时空投",
+  "airdrop.type.manual": "手动空投",
+
+  "airdrop.message.command.spawned": "已生成%s级空投于 (%s, %s, %s)",
+  "airdrop.message.config.added": "已添加物品 %s 到 %s 空投战利品表",
+  "airdrop.message.config.removed": "已从 %s 空投战利品表移除 %s",
+  "airdrop.message.config.not_found": "未找到物品 %s 在 %s 空投战利品表中",
+  "airdrop.message.config.unknown_operation": "未知操作: %s，请使用 add 或 rm",
+  "airdrop.message.signal_gun.cooldown": "§c信号枪冷却中，剩余 %s 秒",
+  "airdrop.message.announcement": "§6[空投] §e%s§6 §a%s§6已出现在 §b(%s, %s, %s)"
 }

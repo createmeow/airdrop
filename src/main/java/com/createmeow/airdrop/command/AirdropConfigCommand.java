@@ -42,20 +42,20 @@ public class AirdropConfigCommand {
         if (operation.equalsIgnoreCase("add")) {
             AirdropLootManager.addEntry(tier, itemId, min, max, weight);
             context.getSource().sendSuccess(
-                    () -> Component.literal("已添加物品 " + itemId + " 到 " + tier.getSerializedName() + " 空投战利品表"),
+                    () -> Component.translatable("airdrop.message.config.added", itemId, tier.getDisplayName()),
                     true);
         } else if (operation.equalsIgnoreCase("rm")) {
             boolean removed = AirdropLootManager.removeEntry(tier, itemId);
             if (removed) {
                 context.getSource().sendSuccess(
-                        () -> Component.literal("已从 " + tier.getSerializedName() + " 空投战利品表移除 " + itemId),
+                        () -> Component.translatable("airdrop.message.config.removed", tier.getDisplayName(), itemId),
                         true);
             } else {
                 context.getSource().sendFailure(
-                        Component.literal("未找到物品 " + itemId + " 在 " + tier.getSerializedName() + " 空投战利品表中"));
+                        Component.translatable("airdrop.message.config.not_found", itemId, tier.getDisplayName()));
             }
         } else {
-            context.getSource().sendFailure(Component.literal("未知操作: " + operation + "，请使用 add 或 rm"));
+            context.getSource().sendFailure(Component.translatable("airdrop.message.config.unknown_operation", operation));
         }
 
         return 1;
