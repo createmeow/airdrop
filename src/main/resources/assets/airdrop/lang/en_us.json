@@ -1,0 +1,12 @@
+{
+  "itemGroup.airdrop": "AirDrop",
+  "block.airdrop.air_drop": "Air Drop",
+  "item.airdrop.signal_gun": "Signal Gun",
+  "item.airdrop.signal_gun_adv": "Advanced Signal Gun",
+
+  "airdrop.configuration.title": "AirDrop Configs",
+  "airdrop.configuration.section.airdrop.common.toml": "AirDrop Configs",
+  "airdrop.configuration.section.airdrop.common.toml.title": "AirDrop Configs",
+  "airdrop.configuration.baseMinDistance": "Base Min Distance",
+  "airdrop.configuration.airdropLifetimeTicks": "Airdrop Lifetime (ticks)"
+}

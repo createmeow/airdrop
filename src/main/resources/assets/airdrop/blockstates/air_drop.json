@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "tier=common": { "model": "airdrop:block/air_drop" },
+    "tier=medium": { "model": "airdrop:block/air_drop" },
+    "tier=advanced": { "model": "airdrop:block/air_drop" }
+  }
+}

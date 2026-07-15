@@ -1,0 +1,12 @@
+{
+  "itemGroup.airdrop": "空投",
+  "block.airdrop.air_drop": "空投",
+  "item.airdrop.signal_gun": "信号枪",
+  "item.airdrop.signal_gun_adv": "高级信号枪",
+
+  "airdrop.configuration.title": "空投配置",
+  "airdrop.configuration.section.airdrop.common.toml": "空投配置",
+  "airdrop.configuration.section.airdrop.common.toml.title": "空投配置",
+  "airdrop.configuration.baseMinDistance": "基地最小距离",
+  "airdrop.configuration.airdropLifetimeTicks": "空投存在时间 (ticks)"
+}
