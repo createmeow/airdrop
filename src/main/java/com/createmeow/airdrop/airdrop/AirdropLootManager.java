@@ -11,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 import java.io.*;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -21,6 +22,14 @@ public class AirdropLootManager {
     private static final Path LOOT_FILE = CONFIG_DIR.resolve("loot.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Random RANDOM = new Random();
+
+    private static final Set<String> BASECORE_PART_ITEMS = Set.of(
+            "basecore:part",
+            "basecore:small_part_bundle",
+            "basecore:medium_part_bundle",
+            "basecore:large_part_bundle"
+    );
+    private static Boolean baseCoreComponentMode = null;
 
     public static void init() {
         LOOT_TABLES.clear();
@@ -240,10 +249,16 @@ public class AirdropLootManager {
         List<LootEntry> entries = LOOT_TABLES.getOrDefault(tier, Collections.emptyList());
         if (entries.isEmpty()) return Collections.emptyList();
 
+        boolean componentMode = isBaseCoreComponentMode();
+        List<LootEntry> effectiveEntries = entries.stream()
+                .filter(e -> !BASECORE_PART_ITEMS.contains(e.itemId) || componentMode)
+                .toList();
+        if (effectiveEntries.isEmpty()) return Collections.emptyList();
+
         List<ItemStack> loot = new ArrayList<>();
         RandomSource random = level.getRandom();
 
-        int totalWeight = entries.stream().mapToInt(e -> e.weight).sum();
+        int totalWeight = effectiveEntries.stream().mapToInt(e -> e.weight).sum();
         int rolls = switch (tier) {
             case COMMON -> 12 + random.nextInt(6);
             case MEDIUM -> 14 + random.nextInt(8);
@@ -253,7 +268,7 @@ public class AirdropLootManager {
         for (int i = 0; i < rolls; i++) {
             int roll = random.nextInt(totalWeight);
             int cumulative = 0;
-            for (LootEntry entry : entries) {
+            for (LootEntry entry : effectiveEntries) {
                 cumulative += entry.weight;
                 if (roll < cumulative) {
                     Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(entry.itemId));
@@ -277,6 +292,20 @@ public class AirdropLootManager {
         }
 
         return loot;
+    }
+
+    private static boolean isBaseCoreComponentMode() {
+        if (baseCoreComponentMode == null) {
+            try {
+                Class<?> configClass = Class.forName("dev.anye.mc.basecore.config.BasecoreConfig");
+                Method method = configClass.getMethod("isComponentMode");
+                baseCoreComponentMode = (Boolean) method.invoke(null);
+            } catch (Exception e) {
+                airDrop.LOGGER.debug("BaseCore not available or not in component mode, filtering part items");
+                baseCoreComponentMode = false;
+            }
+        }
+        return baseCoreComponentMode;
     }
 
     private static void applyEnchantment(ItemStack stack, String enchantmentId, int level, Level levelAccess) {
