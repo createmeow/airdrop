@@ -29,6 +29,25 @@ public class AirdropLootManager {
             "basecore:medium_part_bundle",
             "basecore:large_part_bundle"
     );
+    private static final Set<String> BASECORE_MODULE_ITEMS = Set.of(
+            "basecore:module_substrate",
+            "basecore:range_module",
+            "basecore:secure_module",
+            "basecore:def_module",
+            "basecore:auto_repair_module",
+            "basecore:thorns_module",
+            "basecore:exp_def_module",
+            "basecore:basecore_counter_reconnaissance_module",
+            "basecore:strength_module",
+            "basecore:jump_boost_module",
+            "basecore:regeneration_module",
+            "basecore:resistance_module",
+            "basecore:dig_speed_module",
+            "basecore:movement_speed_module",
+            "basecore:dig_slowdown_module",
+            "basecore:weakness_module",
+            "basecore:movement_slowdown_module"
+    );
     private static Boolean baseCoreComponentMode = null;
 
     public static void init() {
@@ -251,7 +270,11 @@ public class AirdropLootManager {
 
         boolean componentMode = isBaseCoreComponentMode();
         List<LootEntry> effectiveEntries = entries.stream()
-                .filter(e -> !BASECORE_PART_ITEMS.contains(e.itemId) || componentMode)
+                .filter(e -> {
+                    if (BASECORE_PART_ITEMS.contains(e.itemId)) return componentMode;
+                    if (BASECORE_MODULE_ITEMS.contains(e.itemId)) return !componentMode;
+                    return true;
+                })
                 .toList();
         if (effectiveEntries.isEmpty()) return Collections.emptyList();
 
@@ -301,7 +324,7 @@ public class AirdropLootManager {
                 Method method = configClass.getMethod("isComponentMode");
                 baseCoreComponentMode = (Boolean) method.invoke(null);
             } catch (Exception e) {
-                airDrop.LOGGER.debug("BaseCore not available or not in component mode, filtering part items");
+                airDrop.LOGGER.debug("BaseCore not available or mode unknown, filtering mode-specific BaseCore items");
                 baseCoreComponentMode = false;
             }
         }
