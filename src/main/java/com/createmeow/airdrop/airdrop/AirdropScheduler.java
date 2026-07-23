@@ -131,17 +131,31 @@ public class AirdropScheduler {
 
         // 异步寻找位置
         final AirdropData.Tier finalTier = tier;
+        final ServerLevel levelRef = overworld;
+        airDrop.LOGGER.info("Starting async position finding for scheduled airdrop, tier={}", tier);
+
+        if (positionFinderExecutor == null || positionFinderExecutor.isShutdown()) {
+            airDrop.LOGGER.error("Position finder executor not available");
+            isFindingPosition.set(false);
+            return;
+        }
+
         positionFinderExecutor.submit(() -> {
             try {
-                BlockPos pos = findValidPositionAsync(overworld);
+                airDrop.LOGGER.debug("Async position finder started, attempts={}", MAX_POSITION_ATTEMPTS);
+                BlockPos pos = findValidPositionAsync(levelRef);
                 if (pos != null) {
+                    airDrop.LOGGER.info("Found valid position at ({}, {}, {})", pos.getX(), pos.getY(), pos.getZ());
                     // 回到主线程生成空投
                     server.execute(() -> {
-                        spawnAirdrop(overworld, pos, finalTier, true, server);
-                        isFindingPosition.set(false);
+                        try {
+                            spawnAirdrop(levelRef, pos, finalTier, true, server);
+                        } finally {
+                            isFindingPosition.set(false);
+                        }
                     });
                 } else {
-                    airDrop.LOGGER.warn("Could not find valid position for scheduled airdrop");
+                    airDrop.LOGGER.warn("Could not find valid position for scheduled airdrop after {} attempts", MAX_POSITION_ATTEMPTS);
                     isFindingPosition.set(false);
                 }
             } catch (Exception e) {
