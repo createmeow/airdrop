@@ -14,7 +14,6 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -258,16 +257,20 @@ public class AirdropScheduler {
     }
 
     /**
-     * 使用高度图快速找到地表位置，支持冰面、雪层等非完整方块。
-     * MOTION_BLOCKING 高度图考虑了可以阻挡移动的方块（包括冰、雪等）。
+     * 逐格扫描找到地表位置。支持冰面、雪层等非完整方块。
+     * 由于现在是异步执行，不会阻塞主线程。
      */
     private static BlockPos findSurfaceAbove(ServerLevel level, int x, int z) {
-        // 使用高度图获取地表高度，避免逐格扫描
-        int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
-        if (surfaceY <= level.getMinBuildHeight()) {
-            return null;
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos(x, level.getMaxBuildHeight(), z);
+
+        for (int y = level.getMaxBuildHeight(); y > level.getMinBuildHeight(); y--) {
+            cursor.setY(y);
+            BlockState state = level.getBlockState(cursor);
+            if (isSupportingBlock(state)) {
+                return cursor.above().immutable();
+            }
         }
-        return new BlockPos(x, surfaceY + 1, z);
+        return null;
     }
 
     private static boolean isValidPosition(ServerLevel level, BlockPos pos) {
