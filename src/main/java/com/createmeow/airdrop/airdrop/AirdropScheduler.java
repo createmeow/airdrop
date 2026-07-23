@@ -20,12 +20,17 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AirdropScheduler {
     private static final int[] SCHEDULED_HOURS = {2, 5, 8, 11, 14, 17, 20, 23};
     private static final int SIGNAL_GUN_RADIUS = 1000;
     private static final int SIGNAL_GUN_COOLDOWN_TICKS = 20 * 60 * 5;
     private static final int BASE_MIN_DISTANCE = 100;
+    private static final int MAX_POSITION_ATTEMPTS = 200; // 增加寻址尝试次数
 
     private static final Map<UUID, Long> signalGunCooldowns = new ConcurrentHashMap<>();
     private static final Map<ServerLevel, List<ActiveAirdrop>> activeAirdrops = new ConcurrentHashMap<>();
@@ -35,11 +40,18 @@ public class AirdropScheduler {
     private static int lastScheduledHour = -1;
 
     private static boolean initialized = false;
+    private static ExecutorService positionFinderExecutor;
+    private static final AtomicBoolean isFindingPosition = new AtomicBoolean(false);
 
     public static void init(MinecraftServer server) {
         if (initialized) return;
         initialized = true;
         AirdropLootManager.init();
+        positionFinderExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "Airdrop-Position-Finder");
+            t.setDaemon(true);
+            return t;
+        });
         // Initialize to current hour so the first tick won't immediately trigger
         // a scheduled airdrop. Only natural hour transitions will trigger it.
         lastScheduledHour = LocalDateTime.now(ZoneId.systemDefault()).getHour();
@@ -48,9 +60,14 @@ public class AirdropScheduler {
 
     public static void onServerStop() {
         initialized = false;
+        if (positionFinderExecutor != null) {
+            positionFinderExecutor.shutdownNow();
+            positionFinderExecutor = null;
+        }
         activeAirdrops.clear();
         signalGunCooldowns.clear();
         lastScheduledHour = -1;
+        isFindingPosition.set(false);
     }
 
     public static void tick(MinecraftServer server) {
@@ -101,18 +118,37 @@ public class AirdropScheduler {
             return;
         }
 
+        // 如果正在寻找位置，跳过本次触发
+        if (!isFindingPosition.compareAndSet(false, true)) {
+            airDrop.LOGGER.debug("Position finding already in progress, skipping");
+            return;
+        }
+
         AirdropData.Tier tier = rollTier();
 
         mediumBonus = 0.0f;
         advancedBonus = 0.0f;
 
-        BlockPos pos = findValidPosition(overworld);
-        if (pos == null) {
-            airDrop.LOGGER.warn("Could not find valid position for scheduled airdrop");
-            return;
-        }
-
-        spawnAirdrop(overworld, pos, tier, true, server);
+        // 异步寻找位置
+        final AirdropData.Tier finalTier = tier;
+        positionFinderExecutor.submit(() -> {
+            try {
+                BlockPos pos = findValidPositionAsync(overworld);
+                if (pos != null) {
+                    // 回到主线程生成空投
+                    server.execute(() -> {
+                        spawnAirdrop(overworld, pos, finalTier, true, server);
+                        isFindingPosition.set(false);
+                    });
+                } else {
+                    airDrop.LOGGER.warn("Could not find valid position for scheduled airdrop");
+                    isFindingPosition.set(false);
+                }
+            } catch (Exception e) {
+                airDrop.LOGGER.error("Error finding airdrop position", e);
+                isFindingPosition.set(false);
+            }
+        });
     }
 
     public static AirdropData.Tier rollTier() {
@@ -161,9 +197,26 @@ public class AirdropScheduler {
         signalGunCooldowns.put(playerId, System.currentTimeMillis());
     }
 
+    /**
+     * 异步寻找有效空投位置，增加尝试次数以提高成功率。
+     * 使用 ThreadLocalRandom 避免阻塞主线程的随机数生成器。
+     */
+    private static BlockPos findValidPositionAsync(ServerLevel level) {
+        Random random = ThreadLocalRandom.current();
+        for (int i = 0; i < MAX_POSITION_ATTEMPTS; i++) {
+            int x = random.nextInt(6000) - 3000;
+            int z = random.nextInt(6000) - 3000;
+
+            BlockPos pos = findSurfaceAbove(level, x, z);
+            if (pos != null && isValidPosition(level, pos)) {
+                return pos;
+            }
+        }
+        return null;
+    }
+
     public static BlockPos findValidPosition(ServerLevel level) {
-        int maxAttempts = 50;
-        for (int i = 0; i < maxAttempts; i++) {
+        for (int i = 0; i < MAX_POSITION_ATTEMPTS; i++) {
             int x = level.random.nextInt(6000) - 3000;
             int z = level.random.nextInt(6000) - 3000;
 
@@ -176,8 +229,7 @@ public class AirdropScheduler {
     }
 
     public static BlockPos findValidPositionNear(ServerLevel level, BlockPos center, int radius) {
-        int maxAttempts = 50;
-        for (int i = 0; i < maxAttempts; i++) {
+        for (int i = 0; i < MAX_POSITION_ATTEMPTS; i++) {
             int dx = level.random.nextInt(radius * 2) - radius;
             int dz = level.random.nextInt(radius * 2) - radius;
             int x = center.getX() + dx;
