@@ -12,7 +12,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -190,35 +192,38 @@ public class AirdropScheduler {
     }
 
     /**
-     * Scans from top of world downward to find the surface.
-     * This is more reliable than getHeight() for ungenerated chunks,
-     * because it forces full chunk generation and finds the actual solid surface.
+     * 使用高度图快速找到地表位置，支持冰面、雪层等非完整方块。
+     * MOTION_BLOCKING 高度图考虑了可以阻挡移动的方块（包括冰、雪等）。
      */
     private static BlockPos findSurfaceAbove(ServerLevel level, int x, int z) {
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos(x, level.getMaxBuildHeight(), z);
-
-        // Scan from top down to find the first solid block
-        for (int y = level.getMaxBuildHeight(); y > level.getMinBuildHeight(); y--) {
-            cursor.setY(y);
-            if (level.getBlockState(cursor).isSolid()) {
-                // Found the surface block, the airdrop goes one block above
-                return cursor.above().immutable();
-            }
+        // 使用高度图获取地表高度，避免逐格扫描
+        int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+        if (surfaceY <= level.getMinBuildHeight()) {
+            return null;
         }
-        return null;
+        return new BlockPos(x, surfaceY + 1, z);
     }
 
     private static boolean isValidPosition(ServerLevel level, BlockPos pos) {
         if (pos.getY() <= level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) {
             return false;
         }
-        if (!level.getBlockState(pos.below()).isSolid()) {
+
+        // 检查下方方块是否可以支撑空投（包括冰、雪、固体方块）
+        BlockState below = level.getBlockState(pos.below());
+        if (!isSupportingBlock(below)) {
             return false;
         }
-        if (level.getBlockState(pos).isSolid() || level.getBlockState(pos.above()).isSolid()) {
+
+        // 检查空投位置和上方是否有足够空间（不能是固体方块）
+        BlockState at = level.getBlockState(pos);
+        BlockState above = level.getBlockState(pos.above());
+        if (at.isSolid() || above.isSolid()) {
             return false;
         }
-        if (level.getBiome(pos).value().getBaseTemperature() < 0.15f) {
+
+        // 排除岩浆、水等液体位置
+        if (!at.getFluidState().isEmpty() || !above.getFluidState().isEmpty()) {
             return false;
         }
 
@@ -227,6 +232,24 @@ public class AirdropScheduler {
         }
 
         return true;
+    }
+
+    /**
+     * 判断方块是否可以支撑空投箱子。
+     * 包括固体方块、冰、雪层等。
+     */
+    private static boolean isSupportingBlock(BlockState state) {
+        if (state.isAir()) return false;
+        // 固体方块
+        if (state.isSolid()) return true;
+        // 冰类方块（冰、浮冰、蓝冰）
+        if (state.is(Blocks.ICE) || state.is(Blocks.PACKED_ICE) || state.is(Blocks.BLUE_ICE)) return true;
+        // 雪层（支持雪层，但要确保有足够厚度）
+        if (state.is(Blocks.SNOW) && state.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS) >= 1) return true;
+        // 雪块
+        if (state.is(Blocks.SNOW_BLOCK)) return true;
+        // 其他可站立方块
+        return state.is(Blocks.FROSTED_ICE);
     }
 
     public static void spawnAirdrop(ServerLevel level, BlockPos pos, AirdropData.Tier tier, boolean isTimed, MinecraftServer server) {
