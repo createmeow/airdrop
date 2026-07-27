@@ -5,68 +5,108 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class XaeroWaypointHandler {
-    private static final Map<UUID, Map<Integer, Object>> playerWaypoints = new HashMap<>();
-    private static boolean xaeroAvailable = false;
+    // 存储每个玩家的活跃空投路径点：UUID -> (路径点key -> 空投信息)
+    private static final Map<UUID, Map<String, AirdropWaypointInfo>> activeAirdropWaypoints = new ConcurrentHashMap<>();
+
+    // 延迟初始化状态：null=未初始化, true=可用, false=不可用
+    private static volatile Boolean xaeroAvailable = null;
+
+    // 缓存的反射对象
     private static Field customWaypointsField = null;
     private static Method refreshMethod = null;
     private static Object waypointColorRed = null;
     private static Object waypointColorYellow = null;
     private static Object waypointPurposeNormal = null;
+    private static Constructor<?> waypointConstructor = null;
 
-    static {
-        try {
-            Class.forName("xaero.common.minimap.waypoints.Waypoint");
+    /**
+     * 延迟初始化Xaero集成。只在客户端第一次调用时执行。
+     * 这是因为Xaero的类只在客户端存在，在服务端加载会导致ClassNotFoundException。
+     */
+    private static boolean ensureInitialized() {
+        if (xaeroAvailable != null) {
+            return xaeroAvailable;
+        }
 
-            Class<?> waypointsManagerClass = Class.forName("xaero.common.minimap.waypoints.WaypointsManager");
-            customWaypointsField = waypointsManagerClass.getField("customWaypoints");
-            customWaypointsField.setAccessible(true);
-
-            // Try to find the refresh method (different Xaero versions use different names)
-            try {
-                refreshMethod = waypointsManagerClass.getMethod("onCustomWaypointsUpdate");
-            } catch (NoSuchMethodException e1) {
-                try {
-                    refreshMethod = waypointsManagerClass.getMethod("refreshWaypoints");
-                } catch (NoSuchMethodException e2) {
-                    try {
-                        refreshMethod = waypointsManagerClass.getMethod("syncCustomWaypoints");
-                    } catch (NoSuchMethodException e3) {
-                        // Some versions auto-refresh, no refresh method needed
-                        refreshMethod = null;
-                    }
-                }
+        synchronized (XaeroWaypointHandler.class) {
+            if (xaeroAvailable != null) {
+                return xaeroAvailable;
             }
 
-            Class<?> waypointColorClass = Class.forName("xaero.hud.minimap.waypoint.WaypointColor");
-            waypointColorRed = waypointColorClass.getField("RED").get(null);
-            waypointColorYellow = waypointColorClass.getField("YELLOW").get(null);
+            try {
+                // 尝试加载Xaero的路径点类
+                Class<?> waypointClass = Class.forName("xaero.common.minimap.waypoints.Waypoint");
+                airDrop.LOGGER.info("[Airdrop] Found Xaero waypoint class");
 
-            Class<?> waypointPurposeClass = Class.forName("xaero.hud.minimap.waypoint.WaypointPurpose");
-            waypointPurposeNormal = waypointPurposeClass.getField("NORMAL").get(null);
+                // 获取WaypointsManager的customWaypoints字段
+                Class<?> waypointsManagerClass = Class.forName("xaero.common.minimap.waypoints.WaypointsManager");
+                customWaypointsField = waypointsManagerClass.getDeclaredField("customWaypoints");
+                customWaypointsField.setAccessible(true);
 
-            xaeroAvailable = true;
-            airDrop.LOGGER.info("Xaero's Minimap detected, waypoint integration enabled");
-        } catch (Exception e) {
-            xaeroAvailable = false;
-            airDrop.LOGGER.info("Xaero's Minimap not detected, waypoint integration disabled");
+                // 查找刷新方法
+                try {
+                    refreshMethod = waypointsManagerClass.getMethod("onCustomWaypointsUpdate");
+                } catch (NoSuchMethodException e1) {
+                    try {
+                        refreshMethod = waypointsManagerClass.getMethod("refreshWaypoints");
+                    } catch (NoSuchMethodException e2) {
+                        try {
+                            refreshMethod = waypointsManagerClass.getMethod("syncCustomWaypoints");
+                        } catch (NoSuchMethodException e3) {
+                            refreshMethod = null;
+                        }
+                    }
+                }
+
+                // 获取路径点颜色
+                Class<?> waypointColorClass = Class.forName("xaero.hud.minimap.waypoint.WaypointColor");
+                waypointColorRed = waypointColorClass.getField("RED").get(null);
+                waypointColorYellow = waypointColorClass.getField("YELLOW").get(null);
+
+                // 获取路径点用途
+                Class<?> waypointPurposeClass = Class.forName("xaero.hud.minimap.waypoint.WaypointPurpose");
+                waypointPurposeNormal = waypointPurposeClass.getField("NORMAL").get(null);
+
+                // 缓存构造函数
+                waypointConstructor = waypointClass.getConstructor(
+                        int.class, int.class, int.class,
+                        String.class, String.class,
+                        waypointColorClass,
+                        waypointPurposeClass,
+                        boolean.class
+                );
+
+                xaeroAvailable = true;
+                airDrop.LOGGER.info("[Airdrop] Xaero's Minimap integration enabled (lazy init)");
+            } catch (Exception e) {
+                xaeroAvailable = false;
+                airDrop.LOGGER.info("[Airdrop] Xaero's Minimap not available on this side: {}", e.getMessage());
+            }
         }
-    }
 
-    public static boolean isXaeroAvailable() {
         return xaeroAvailable;
     }
 
+    public static boolean isXaeroAvailable() {
+        return ensureInitialized();
+    }
+
     /**
-     * Get the dimension key string used by Xaero for the given player's level.
-     * Xaero stores waypoints keyed by dimension ID (e.g. "minecraft:overworld").
+     * 生成唯一的路径点 key，包含维度信息。
+     */
+    private static String generateWaypointKey(BlockPos pos, String dimension) {
+        return dimension + ":" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
+    /**
+     * 获取维度key字符串。
      */
     private static String getDimensionKey(Player player) {
         if (player == null || player.level() == null) return "minecraft:overworld";
@@ -86,7 +126,7 @@ public class XaeroWaypointHandler {
             }
             return wps;
         } catch (Exception e) {
-            airDrop.LOGGER.warn("Failed to access Xaero custom waypoints: {}", e.getMessage());
+            airDrop.LOGGER.warn("[Airdrop] Failed to access Xaero custom waypoints: {}", e.getMessage());
             return null;
         }
     }
@@ -100,57 +140,104 @@ public class XaeroWaypointHandler {
         }
     }
 
+    /**
+     * 创建空投路径点。只在客户端调用。
+     */
     public static void createWaypoint(Player player, BlockPos pos, String name, boolean isTimed) {
-        if (!xaeroAvailable) return;
+        if (!ensureInitialized()) {
+            airDrop.LOGGER.debug("[Airdrop] Xaero not available, skipping waypoint creation");
+            return;
+        }
 
         try {
-            Class<?> waypointColorClass = Class.forName("xaero.hud.minimap.waypoint.WaypointColor");
-            Class<?> waypointPurposeClass = Class.forName("xaero.hud.minimap.waypoint.WaypointPurpose");
-            Class<?> waypointClass = Class.forName("xaero.common.minimap.waypoints.Waypoint");
-
             Object color = isTimed ? waypointColorRed : waypointColorYellow;
             String initials = isTimed ? "A" : "V";
 
-            Object waypoint = waypointClass.getConstructor(
-                    int.class, int.class, int.class,
-                    String.class, String.class,
-                    waypointColorClass,
-                    waypointPurposeClass,
-                    boolean.class
-            ).newInstance(pos.getX(), pos.getY(), pos.getZ(), name, initials, color, waypointPurposeNormal, true);
+            Object waypoint = waypointConstructor.newInstance(
+                    pos.getX(), pos.getY(), pos.getZ(), name, initials, color, waypointPurposeNormal, true
+            );
 
             Hashtable<Integer, Object> customWaypoints = getCustomWaypoints(player);
             if (customWaypoints != null) {
-                int key = pos.hashCode();
-                customWaypoints.put(key, waypoint);
-                playerWaypoints.computeIfAbsent(player.getUUID(), k -> new HashMap<>()).put(key, waypoint);
+                String dimKey = getDimensionKey(player);
+                String waypointKey = generateWaypointKey(pos, dimKey);
+                int hashKey = waypointKey.hashCode();
+
+                customWaypoints.put(hashKey, waypoint);
+
+                // 记录活跃的空投路径点
+                activeAirdropWaypoints.computeIfAbsent(player.getUUID(), k -> new ConcurrentHashMap<>())
+                        .put(waypointKey, new AirdropWaypointInfo(pos, dimKey, hashKey));
+
                 refreshWaypoints();
-                airDrop.LOGGER.info("Xaero waypoint created at ({}, {}, {}) for dim '{}'",
-                        pos.getX(), pos.getY(), pos.getZ(), getDimensionKey(player));
+                airDrop.LOGGER.info("[Airdrop] Xaero waypoint created at ({}, {}, {}) for dim '{}'",
+                        pos.getX(), pos.getY(), pos.getZ(), dimKey);
             }
         } catch (Exception e) {
-            airDrop.LOGGER.warn("Failed to create Xaero waypoint: {}", e.getMessage());
+            airDrop.LOGGER.error("[Airdrop] Failed to create Xaero waypoint", e);
         }
     }
 
+    /**
+     * 移除空投路径点。只在客户端调用。
+     */
     public static void removeWaypoint(Player player, BlockPos pos) {
-        if (!xaeroAvailable) return;
+        if (!ensureInitialized()) return;
 
         try {
-            Hashtable<Integer, Object> customWaypoints = getCustomWaypoints(player);
-            if (customWaypoints != null) {
-                customWaypoints.remove(pos.hashCode());
+            String dimKey = getDimensionKey(player);
+            String waypointKey = generateWaypointKey(pos, dimKey);
+
+            // 先从活跃路径点映射中获取hashKey
+            Map<String, AirdropWaypointInfo> playerWaypoints = activeAirdropWaypoints.get(player.getUUID());
+            int hashKey;
+            if (playerWaypoints != null && playerWaypoints.containsKey(waypointKey)) {
+                AirdropWaypointInfo info = playerWaypoints.remove(waypointKey);
+                hashKey = info.hashKey;
+            } else {
+                // 如果缓存中没有，重新计算hashKey
+                hashKey = waypointKey.hashCode();
             }
 
-            Map<Integer, Object> waypoints = playerWaypoints.get(player.getUUID());
-            if (waypoints != null) {
-                waypoints.remove(pos.hashCode());
+            Hashtable<Integer, Object> customWaypoints = getCustomWaypoints(player);
+            if (customWaypoints != null) {
+                customWaypoints.remove(hashKey);
             }
 
             refreshWaypoints();
-            airDrop.LOGGER.debug("Removed Xaero waypoint at ({}, {}, {})", pos.getX(), pos.getY(), pos.getZ());
+            airDrop.LOGGER.debug("[Airdrop] Removed Xaero waypoint at ({}, {}, {})", pos.getX(), pos.getY(), pos.getZ());
         } catch (Exception e) {
-            airDrop.LOGGER.warn("Failed to remove Xaero waypoint: {}", e.getMessage());
+            airDrop.LOGGER.error("[Airdrop] Failed to remove Xaero waypoint", e);
+        }
+    }
+
+    /**
+     * 当玩家加入时调用。
+     */
+    public static void onPlayerJoin(Player player) {
+        // 路径点同步由服务端通过网络包处理，客户端不需要额外操作
+    }
+
+    /**
+     * 当玩家退出时，清理该玩家的路径点缓存。
+     */
+    public static void onPlayerLeave(UUID playerId) {
+        activeAirdropWaypoints.remove(playerId);
+        airDrop.LOGGER.debug("[Airdrop] Cleaned up waypoint cache for player {}", playerId);
+    }
+
+    /**
+     * 存储空投路径点信息。
+     */
+    private static class AirdropWaypointInfo {
+        final BlockPos pos;
+        final String dimension;
+        final int hashKey;
+
+        AirdropWaypointInfo(BlockPos pos, String dimension, int hashKey) {
+            this.pos = pos;
+            this.dimension = dimension;
+            this.hashKey = hashKey;
         }
     }
 }

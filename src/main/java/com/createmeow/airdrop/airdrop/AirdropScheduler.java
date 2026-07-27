@@ -1,5 +1,6 @@
 package com.createmeow.airdrop.airdrop;
 
+import com.createmeow.airdrop.Config;
 import com.createmeow.airdrop.airDrop;
 import com.createmeow.airdrop.block.AirDropBlockEntity;
 import com.createmeow.airdrop.integration.BaseCraftIntegration;
@@ -89,7 +90,7 @@ public class AirdropScheduler {
             for (ActiveAirdrop airdrop : drops) {
                 if (level.isLoaded(airdrop.pos)) {
                     if (level.getBlockEntity(airdrop.pos) instanceof AirDropBlockEntity be) {
-                        be.tick(level, airdrop.pos, level.getBlockState(airdrop.pos));
+                        AirDropBlockEntity.tick(level, airdrop.pos, level.getBlockState(airdrop.pos), be);
                     }
                 }
             }
@@ -213,12 +214,19 @@ public class AirdropScheduler {
     /**
      * 异步寻找有效空投位置，增加尝试次数以提高成功率。
      * 使用 ThreadLocalRandom 避免阻塞主线程的随机数生成器。
+     * 使用配置的最小/最大范围。
      */
     private static BlockPos findValidPositionAsync(ServerLevel level) {
         Random random = ThreadLocalRandom.current();
+        int minRange = Config.MIN_SPAWN_RANGE.get();
+        int maxRange = Config.MAX_SPAWN_RANGE.get();
+
         for (int i = 0; i < MAX_POSITION_ATTEMPTS; i++) {
-            int x = random.nextInt(6000) - 3000;
-            int z = random.nextInt(6000) - 3000;
+            // 在最小/最大范围内随机生成位置
+            double angle = random.nextDouble() * 2 * Math.PI;
+            double distance = minRange + random.nextDouble() * (maxRange - minRange);
+            int x = (int) (Math.cos(angle) * distance);
+            int z = (int) (Math.sin(angle) * distance);
 
             BlockPos pos = findSurfaceAbove(level, x, z);
             if (pos != null && isValidPosition(level, pos)) {
@@ -229,9 +237,15 @@ public class AirdropScheduler {
     }
 
     public static BlockPos findValidPosition(ServerLevel level) {
+        int minRange = Config.MIN_SPAWN_RANGE.get();
+        int maxRange = Config.MAX_SPAWN_RANGE.get();
+
         for (int i = 0; i < MAX_POSITION_ATTEMPTS; i++) {
-            int x = level.random.nextInt(6000) - 3000;
-            int z = level.random.nextInt(6000) - 3000;
+            // 在最小/最大范围内随机生成位置
+            double angle = level.random.nextDouble() * 2 * Math.PI;
+            double distance = minRange + level.random.nextDouble() * (maxRange - minRange);
+            int x = (int) (Math.cos(angle) * distance);
+            int z = (int) (Math.sin(angle) * distance);
 
             BlockPos pos = findSurfaceAbove(level, x, z);
             if (pos != null && isValidPosition(level, pos)) {
@@ -371,13 +385,85 @@ public class AirdropScheduler {
         AirdropNetwork.sendWaypointRemoveToAll(level.getServer(), pos);
     }
 
-    public static void spawnCommandAirdrop(MinecraftServer server, AirdropData.Tier tier, BlockPos pos) {
+    /**
+     * 当空投方块实体从NBT加载时，重新创建路径点并注册到活跃列表。
+     * 这可以修复服务器重启后路径点损坏的问题。
+     */
+    public static void restoreAirdropOnLoad(ServerLevel level, AirDropBlockEntity be) {
+        if (be == null || !be.isInitialized()) return;
+
+        BlockPos pos = be.getBlockPos();
+
+        // 检查是否已在活跃列表中
+        List<ActiveAirdrop> drops = activeAirdrops.get(level);
+        if (drops != null && drops.stream().anyMatch(a -> a.pos.equals(pos))) {
+            airDrop.LOGGER.debug("Airdrop at ({}, {}, {}) already in active list", pos.getX(), pos.getY(), pos.getZ());
+            return;
+        }
+
+        // 添加到活跃列表
+        activeAirdrops.computeIfAbsent(level, k -> new ArrayList<>())
+                .add(new ActiveAirdrop(pos, be.getTier(), System.currentTimeMillis()));
+
+        // 重新创建路径点（使用当前时间，因为路径点名称只是为了帮助玩家识别）
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        String waypointName = String.format("%d/%d/%d %s空投",
+                now.getMonthValue(), now.getDayOfMonth(), now.getHour(),
+                be.isTimedAirdrop() ? "定时" : "手动");
+
+        AirdropNetwork.sendWaypointCreateToAll(level.getServer(), pos, waypointName, be.isTimedAirdrop());
+
+        airDrop.LOGGER.info("Restored airdrop at ({}, {}, {}) on server restart, tier={}, timed={}",
+                pos.getX(), pos.getY(), pos.getZ(), be.getTier(), be.isTimedAirdrop());
+    }
+
+    /**
+     * 当玩家加入服务器时，同步当前所有活跃空投的路径点。
+     * 这可以修复玩家退出后空投消失导致的路径点损坏问题。
+     */
+    public static void onPlayerJoin(ServerPlayer player) {
+        if (player == null || player.server == null) return;
+
+        MinecraftServer server = player.server;
+        ServerLevel overworld = server.getLevel(Level.OVERWORLD);
+        if (overworld == null) return;
+
+        List<ActiveAirdrop> drops = activeAirdrops.get(overworld);
+        if (drops == null || drops.isEmpty()) {
+            airDrop.LOGGER.debug("No active airdrops to sync for player {}", player.getName().getString());
+            return;
+        }
+
+        // 发送所有活跃空投的路径点给新加入的玩家
+        for (ActiveAirdrop airdrop : drops) {
+            if (overworld.getBlockEntity(airdrop.pos) instanceof AirDropBlockEntity be) {
+                // 使用当前时间，因为路径点名称只是为了帮助玩家识别
+                LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+                String waypointName = String.format("%d/%d/%d %s空投",
+                        now.getMonthValue(), now.getDayOfMonth(), now.getHour(),
+                        be.isTimedAirdrop() ? "定时" : "手动");
+
+                // 只发送给这个特定的玩家
+                AirdropNetwork.WaypointCreatePayload payload = new AirdropNetwork.WaypointCreatePayload(
+                        airdrop.pos.getX(), airdrop.pos.getY(), airdrop.pos.getZ(),
+                        waypointName, be.isTimedAirdrop()
+                );
+                net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, payload);
+
+                airDrop.LOGGER.debug("Synced airdrop waypoint at ({}, {}, {}) to player {}",
+                        airdrop.pos.getX(), airdrop.pos.getY(), airdrop.pos.getZ(),
+                        player.getName().getString());
+            }
+        }
+    }
+
+    public static void spawnCommandAirdrop(MinecraftServer server, AirdropData.Tier tier, BlockPos pos, boolean isTimed) {
         ServerLevel overworld = server.getLevel(Level.OVERWORLD);
         if (overworld == null) {
             airDrop.LOGGER.warn("Overworld not available");
             return;
         }
-        spawnAirdrop(overworld, pos, tier, false, server);
+        spawnAirdrop(overworld, pos, tier, isTimed, server);
     }
 
     public static class ActiveAirdrop {

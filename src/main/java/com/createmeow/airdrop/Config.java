@@ -13,5 +13,13 @@ public class Config {
             .comment("Lifetime of an airdrop in ticks (default 4 in-game days = 96000 ticks)")
             .defineInRange("airdropLifetimeTicks", 96000, 12000, 480000);
 
+    public static final ModConfigSpec.IntValue MIN_SPAWN_RANGE = BUILDER
+            .comment("Minimum distance from world spawn (0, 0) for airdrop spawning")
+            .defineInRange("minSpawnRange", 500, 0, 10000);
+
+    public static final ModConfigSpec.IntValue MAX_SPAWN_RANGE = BUILDER
+            .comment("Maximum distance from world spawn (0, 0) for airdrop spawning")
+            .defineInRange("maxSpawnRange", 3000, 100, 30000);
+
     static final ModConfigSpec SPEC = BUILDER.build();
 }

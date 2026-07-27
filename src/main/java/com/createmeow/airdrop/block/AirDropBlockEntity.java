@@ -71,11 +71,11 @@ public class AirDropBlockEntity extends BlockEntity implements Container, MenuPr
         }
     }
 
-    public void tick(Level level, BlockPos pos, BlockState state) {
-        if (!initialized) return;
-        long elapsed = level.getGameTime() - spawnTime;
-        if (elapsed >= LIFETIME_TICKS || isEmpty()) {
-            AirdropScheduler.removeAirdrop(level, pos, this);
+    public static void tick(Level level, BlockPos pos, BlockState state, AirDropBlockEntity blockEntity) {
+        if (!blockEntity.initialized) return;
+        long elapsed = level.getGameTime() - blockEntity.spawnTime;
+        if (elapsed >= LIFETIME_TICKS || blockEntity.isEmpty()) {
+            // 只移除方块，路径点移除会在AirDropBlock.onRemove()中处理
             level.removeBlock(pos, false);
         }
     }
@@ -100,6 +100,14 @@ public class AirDropBlockEntity extends BlockEntity implements Container, MenuPr
 
     public boolean isTimedAirdrop() {
         return isTimedAirdrop;
+    }
+
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public long getSpawnTime() {
+        return spawnTime;
     }
 
     @Override
@@ -176,6 +184,30 @@ public class AirDropBlockEntity extends BlockEntity implements Container, MenuPr
         isTimedAirdrop = tag.getBoolean("IsTimedAirdrop");
         items = NonNullList.withSize(CONTAINER_SIZE, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(tag, items, registries);
+
+        // 如果空投已超时或为空，标记需要移除（会在下一次tick时处理）
+        // 这里不立即移除，因为可能还没有level引用
+        if (initialized && level != null) {
+            long elapsed = level.getGameTime() - spawnTime;
+            if (elapsed >= LIFETIME_TICKS || isEmpty()) {
+                airDrop.LOGGER.info("Loaded airdrop at ({}, {}, {}) is already expired or empty, will be removed on next tick",
+                        worldPosition.getX(), worldPosition.getY(), worldPosition.getZ());
+            }
+        }
+    }
+
+    @Override
+    public void setLevel(Level level) {
+        super.setLevel(level);
+        // 当方块实体被加载到世界中时，检查是否需要重新创建路径点
+        if (!level.isClientSide && initialized && !isEmpty()) {
+            // 检查是否还有效
+            long elapsed = level.getGameTime() - spawnTime;
+            if (elapsed < LIFETIME_TICKS) {
+                // 重新创建路径点
+                AirdropScheduler.restoreAirdropOnLoad((net.minecraft.server.level.ServerLevel) level, this);
+            }
+        }
     }
 
     @Override

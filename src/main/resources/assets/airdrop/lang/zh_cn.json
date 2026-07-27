@@ -9,6 +9,8 @@
   "airdrop.configuration.section.airdrop.common.toml.title": "空投配置",
   "airdrop.configuration.baseMinDistance": "基地最小距离",
   "airdrop.configuration.airdropLifetimeTicks": "空投存在时间 (ticks)",
+  "airdrop.configuration.minSpawnRange": "空投最小生成范围",
+  "airdrop.configuration.maxSpawnRange": "空投最大生成范围",
 
   "airdrop.tier.common": "普通",
   "airdrop.tier.medium": "中等",
@@ -17,7 +19,8 @@
   "airdrop.type.timed": "定时空投",
   "airdrop.type.manual": "手动空投",
 
-  "airdrop.message.command.spawned": "已生成%s空投于 (%s, %s, %s)",
+  "airdrop.message.command.spawned": "已生成%s空投于 (%s, %s, %s)，类型：%s",
+  "airdrop.message.command.invalid_position": "无效的坐标",
   "airdrop.message.config.added": "已添加物品 %s 到 %s 空投战利品表",
   "airdrop.message.config.removed": "已从 %s 空投战利品表移除 %s",
   "airdrop.message.config.not_found": "未找到物品 %s 在 %s 空投战利品表中",

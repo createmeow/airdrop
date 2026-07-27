@@ -9,6 +9,8 @@
   "airdrop.configuration.section.airdrop.common.toml.title": "AirDrop Configs",
   "airdrop.configuration.baseMinDistance": "Base Min Distance",
   "airdrop.configuration.airdropLifetimeTicks": "Airdrop Lifetime (ticks)",
+  "airdrop.configuration.minSpawnRange": "Min Spawn Range",
+  "airdrop.configuration.maxSpawnRange": "Max Spawn Range",
 
   "airdrop.tier.common": "Common",
   "airdrop.tier.medium": "Medium",
@@ -17,7 +19,8 @@
   "airdrop.type.timed": "Timed Airdrop",
   "airdrop.type.manual": "Manual Airdrop",
 
-  "airdrop.message.command.spawned": "Spawned %s airdrop at (%s, %s, %s)",
+  "airdrop.message.command.spawned": "Spawned %s airdrop at (%s, %s, %s), type: %s",
+  "airdrop.message.command.invalid_position": "Invalid position",
   "airdrop.message.config.added": "Added item %s to %s airdrop loot table",
   "airdrop.message.config.removed": "Removed %s from %s airdrop loot table",
   "airdrop.message.config.not_found": "Item %s not found in %s airdrop loot table",
