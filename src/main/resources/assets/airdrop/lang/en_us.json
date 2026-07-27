@@ -9,8 +9,10 @@
   "airdrop.configuration.section.airdrop.common.toml.title": "AirDrop Configs",
   "airdrop.configuration.baseMinDistance": "Base Min Distance",
   "airdrop.configuration.airdropLifetimeTicks": "Airdrop Lifetime (ticks)",
-  "airdrop.configuration.minSpawnRange": "Min Spawn Range",
-  "airdrop.configuration.maxSpawnRange": "Max Spawn Range",
+  "airdrop.configuration.timedMinSpawnRange": "Timed Airdrop Min Spawn Range",
+  "airdrop.configuration.timedMaxSpawnRange": "Timed Airdrop Max Spawn Range",
+  "airdrop.configuration.manualMinSpawnRange": "Manual Airdrop Min Spawn Range",
+  "airdrop.configuration.manualMaxSpawnRange": "Manual Airdrop Max Spawn Range",
 
   "airdrop.tier.common": "Common",
   "airdrop.tier.medium": "Medium",

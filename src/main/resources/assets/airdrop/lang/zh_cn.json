@@ -9,8 +9,10 @@
   "airdrop.configuration.section.airdrop.common.toml.title": "空投配置",
   "airdrop.configuration.baseMinDistance": "基地最小距离",
   "airdrop.configuration.airdropLifetimeTicks": "空投存在时间 (ticks)",
-  "airdrop.configuration.minSpawnRange": "空投最小生成范围",
-  "airdrop.configuration.maxSpawnRange": "空投最大生成范围",
+  "airdrop.configuration.timedMinSpawnRange": "定时空投最小生成范围",
+  "airdrop.configuration.timedMaxSpawnRange": "定时空投最大生成范围",
+  "airdrop.configuration.manualMinSpawnRange": "手动空投最小生成范围",
+  "airdrop.configuration.manualMaxSpawnRange": "手动空投最大生成范围",
 
   "airdrop.tier.common": "普通",
   "airdrop.tier.medium": "中等",

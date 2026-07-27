@@ -212,14 +212,14 @@ public class AirdropScheduler {
     }
 
     /**
-     * 异步寻找有效空投位置，增加尝试次数以提高成功率。
+     * 异步寻找有效空投位置（用于定时空投）。
      * 使用 ThreadLocalRandom 避免阻塞主线程的随机数生成器。
-     * 使用配置的最小/最大范围。
+     * 使用定时空投的配置范围。
      */
     private static BlockPos findValidPositionAsync(ServerLevel level) {
         Random random = ThreadLocalRandom.current();
-        int minRange = Config.MIN_SPAWN_RANGE.get();
-        int maxRange = Config.MAX_SPAWN_RANGE.get();
+        int minRange = Config.TIMED_MIN_SPAWN_RANGE.get();
+        int maxRange = Config.TIMED_MAX_SPAWN_RANGE.get();
 
         for (int i = 0; i < MAX_POSITION_ATTEMPTS; i++) {
             // 在最小/最大范围内随机生成位置
@@ -236,9 +236,13 @@ public class AirdropScheduler {
         return null;
     }
 
+    /**
+     * 寻找有效空投位置（用于手动空投）。
+     * 使用手动空投的配置范围。
+     */
     public static BlockPos findValidPosition(ServerLevel level) {
-        int minRange = Config.MIN_SPAWN_RANGE.get();
-        int maxRange = Config.MAX_SPAWN_RANGE.get();
+        int minRange = Config.MANUAL_MIN_SPAWN_RANGE.get();
+        int maxRange = Config.MANUAL_MAX_SPAWN_RANGE.get();
 
         for (int i = 0; i < MAX_POSITION_ATTEMPTS; i++) {
             // 在最小/最大范围内随机生成位置
